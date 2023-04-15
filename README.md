@@ -1,5 +1,5 @@
 ##Simple ChromaDB Interface for Collection creation, management, Embedding and built in QnA Tool
-This is a Python script that allows you to create a collection of text documents, add documents to the collection, and query the collection using OpenAI's GPT-3.5 model. The script uses ChromaDB as the document database and OpenAI's API to generate embeddings and perform question-answering.
+This is a Python script that allows you to create a collection of text documents, add documents to the collection, and query the collection using OpenAI's GPT-3.5 model. The script uses ChromaDB as the document database and embedding generator and uses OpenAI's API to perform chat style question-answering.
 
 Getting Started
 To use this tool, you will need to have the following:
