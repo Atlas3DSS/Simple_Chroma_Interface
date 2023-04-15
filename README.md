@@ -25,7 +25,10 @@ This will launch the tool and display a menu with several options. You can creat
 
 When querying a collection, you will be prompted to enter a query text and the number of results to return. The tool will generate embeddings for the documents in the collection using OpenAI's API, and return the top search results.
 I have also added thw two scripts i used to take pdfs and turn them into text files that are chunked and then summarized. I used both of those to produce the texts that i would embed using the simple_chroma_interface.py
+
 Configuration can be handled in the interface
+
+
 ![image](https://user-images.githubusercontent.com/89653506/232256119-846cd869-b961-46e3-ba9a-82b9b75a5c32.png)
 ![image](https://user-images.githubusercontent.com/89653506/232256145-a9cc671f-57b2-4eed-85be-cbc573fb2974.png)
 ![image](https://user-images.githubusercontent.com/89653506/232256172-5936acea-6e2a-4acd-a396-0302f45881a2.png)
