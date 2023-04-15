@@ -24,7 +24,8 @@ simple_chroma_interface.py
 This will launch the tool and display a menu with several options. You can create a new collection, add documents to an existing collection, query a collection, and delete a collection. You can also load an existing collection and perform actions on it.
 
 When querying a collection, you will be prompted to enter a query text and the number of results to return. The tool will generate embeddings for the documents in the collection using OpenAI's API, and return the top search results.
-I have also added thw two scripts i used to take pdfs and turn them into text files that are chunked and then summarized. I used both of those to produce the texts that i would embed using the simple_chroma_interface.py
+
+I have also added the two scripts i used to take pdfs and turn them into text files that are chunked and then summarized. I used both of those to produce the texts that i would embed using the simple_chroma_interface.py they should work just fine too. 
 
 Configuration can be handled in the interface
 
