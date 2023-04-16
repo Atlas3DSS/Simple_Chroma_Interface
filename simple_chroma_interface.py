@@ -1,6 +1,7 @@
 import chromadb
 import os
 import openai
+from PyPDF2 import PdfReader
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -21,6 +22,34 @@ def create_collection(chroma_client):
     collection = chroma_client.create_collection(name=name)
     print(f"Collection {name} created.")
     return collection, name
+
+def chunk_text(text: str, max_chunk: int = 1500, min_chunk: int = 150, overlap: int = 300):
+    print("Chunking text...")
+    words = text.split()
+    chunks = []
+    start = 0
+    while start < len(words):
+        end = start + max_chunk
+        if end < len(words) and len(words[end:]) > min_chunk:
+            end -= overlap
+        chunks.append(' '.join(words[start:end]))
+        start = end
+    print("Text chunked.")
+    return chunks
+
+def process_txt(txt_path):
+    txt_file_name = os.path.basename(txt_path).replace('.txt', '')
+    chunked_folder = f"chunked_{txt_file_name}"
+    if not os.path.exists(chunked_folder):
+        os.makedirs(chunked_folder)
+    with open(txt_path, 'r', encoding='utf-8', errors='replace') as f:
+        text = f.read()
+    chunks = chunk_text(text)
+    for i, chunk in enumerate(chunks):
+        with open(os.path.join(chunked_folder, f"chunk_{i + 1}.txt"), "w", encoding='utf-8', errors='replace') as f:
+            f.write(chunk)
+    return chunked_folder
+
 
 def add_documents_from_folder(collection, folder_path):
     """Add all text files in the specified folder to the collection."""
@@ -73,6 +102,33 @@ def query_collection(collection):
     # Print the response
     print(f"Athena's response: {athena_response}")
 
+unwanted_strings = ["This ebook belongs to William Tatum (info@atlas3dss.com),", "purchased on 14/04/2023"]
+
+def remove_unwanted_strings(text, unwanted_strings):
+    for string in unwanted_strings:
+        text = text.replace(string, '')
+    return text
+
+
+def get_text_from_pdf(pdf_path, unwanted_strings):
+    txt_file_name = pdf_path.replace('.pdf', '.txt')
+    if os.path.isfile(txt_file_name):
+        print("Text file already exists, skipping text extraction.")
+        with open(txt_file_name, 'r', encoding='utf-8', errors='replace') as f:
+            text = f.read()
+    else:
+        print("Getting text from pdf...")
+        with open(pdf_path, 'rb') as f:
+            pdf = PdfReader(f)
+            number_of_pages = len(pdf.pages)
+            text = ''
+            for page in range(number_of_pages):
+                text += pdf.pages[page].extract_text()
+            text = remove_unwanted_strings(text, unwanted_strings)
+            with open(txt_file_name, 'w', encoding='utf-8', errors='replace') as f:
+                f.write(text)
+            print("Text file saved.")
+    return text
 
 
 def ask_athena(athena_prompt):
@@ -126,8 +182,10 @@ def main():
         print("2. Add documents from a folder to a collection")
         print("3. Query a collection")
         print("4. Load a collection")
-        print("5. Delete a collection")
-        print("6. Quit")
+        print("5. Process a PDF")
+        print("6. Process a TXT")
+        print("7. Delete a collection")
+        print("8. Quit")
         choice = input("Enter your choice: ")
         if choice == "1":
             name = input("Enter a name for the collection: ")
@@ -161,14 +219,22 @@ def main():
             except ValueError as e:
                 print(f"Error: {e}")
         elif choice == "5":
+            pdf_path = input("Enter the path to the PDF: ")
+            get_text_from_pdf(pdf_path, unwanted_strings)
+        elif choice == "6":
+            txt_path = input("Enter the path to the TXT: ")
+            process_txt(txt_path)
+        elif choice == "7":
             name = input("Enter the name of the collection to delete: ")
             try:
                 chroma_client.delete_collection(name=name)
                 print(f"Collection {name} deleted.")
             except ValueError as e:
                 print(f"Error: {e}")
-        elif choice == "6":
+        elif choice == "8":
             break
+
+
 
 if __name__ == "__main__":
     main()
