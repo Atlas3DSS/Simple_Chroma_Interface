@@ -102,7 +102,7 @@ def query_collection(collection):
     # Print the response
     print(f"Athena's response: {athena_response}")
 
-unwanted_strings = ["This ebook belongs to,", "purchased on"]
+unwanted_strings = ["This ebook belongs to William Tatum (info@atlas3dss.com),", "purchased on 14/04/2023"]
 
 def remove_unwanted_strings(text, unwanted_strings):
     for string in unwanted_strings:
@@ -150,7 +150,8 @@ def collection_menu(collection):
         print("4. Return to main menu")
         choice = input("Enter your choice: ")
         if choice == "1":
-           query_collection(collection)
+           while True: 
+            query_collection(collection)            
         elif choice == "2":
             ##get folder path pass to add documents from folder function do not create a folder if its not there throw error
             folder_path = input("Enter the path to the folder containing the text files: ")
@@ -211,6 +212,14 @@ def main():
                 continue
             query_collection(collection)
         elif choice == "4":
+            current_databases = chroma_client.list_collections()
+            if len(current_databases) == 0:
+                print("No collections found.")
+                continue
+            print("Current collections:")
+            ##print just the names of the collections
+            for collection in current_databases:
+                print(collection)
             name = input("Enter the name of the collection to load: ")
             try:
                 collection = chroma_client.get_or_create_collection(name=name)
@@ -233,8 +242,6 @@ def main():
                 print(f"Error: {e}")
         elif choice == "8":
             break
-
-
 
 if __name__ == "__main__":
     main()
