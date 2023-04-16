@@ -102,7 +102,7 @@ def query_collection(collection):
     # Print the response
     print(f"Athena's response: {athena_response}")
 
-unwanted_strings = ["This ebook belongs to William Tatum (info@atlas3dss.com),", "purchased on 14/04/2023"]
+unwanted_strings = ["This ebook belongs to,", "purchased on"]
 
 def remove_unwanted_strings(text, unwanted_strings):
     for string in unwanted_strings:
