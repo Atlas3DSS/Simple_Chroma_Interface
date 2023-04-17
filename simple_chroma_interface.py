@@ -114,7 +114,7 @@ def extract_keywords(chunks, book_title):
 def extract_keywords_athena(chunk, book_title):
     response = openai.ChatCompletion.create(
         model='gpt-3.5-turbo',
-        max_tokens=4000,
+        max_tokens=2500,
         messages=[
             {'role': 'system', 'content': f'You are Athena, and you extract keywords from chunks of text from books. At the start of your extraction, state "This keyword extraction corresponds to {book_title}." Now, please extract keywords from the following chunk: {chunk} from the book {book_title}. For this task, you will identify and return the most important keywords or key phrases from the chunk. At the end of your extraction, always state "This keyword extraction corresponds to {book_title}."'},
         ],
@@ -139,7 +139,7 @@ def chunk_cleaning(chunks, book_title):
 def clean_athena_(chunk,book_title):
     response = openai.ChatCompletion.create(
         model='gpt-3.5-turbo',
-        max_tokens=4000,
+        max_tokens=2500,
         temperature=0.0,
         messages=[
             {'role': 'system', 'content': f'You are Athena, you clean chunks of text from books. At the start of your cleaning state "This cleaning corresponds to {book_title}. Now, please clean the following: {chunk} from the following book {book_title}. For this task you will clean up the formatting of the chunk delivered to you. You will return the chunk with only formatting, grammar, or spelling changes. You wil not add new content or otherwise alter the meaning of the text. At the end of your cleaning always state "This cleaning corresponds to {book_title}."'},    
@@ -209,7 +209,7 @@ def ask_summarize_athena(chunk, book_title):
     book_title = book_title
     response = openai.ChatCompletion.create(
         model='gpt-3.5-turbo',
-        max_tokens=4000,
+        max_tokens=2500,
         messages=[
             {'role': 'system', 'content': f'"You are Athena, you summarize snippets of text from books. At the start of your summaries state "This summary corresponds to {book_title}. Now, please summarize the following: {chunk} from the following book {book_title}. Verbosity is preferred over brevity. Use as many words as you need to summarize the chunk. Avoid jargon but include any relevant technical terms. Specifically pull out any definitions, keywords, or explanations of terms that are relevant to the chunk. At the end of your summary always state "This summary corresponds to {book_title}."'},    
         ],
@@ -220,7 +220,7 @@ def ask_summarize_athena(chunk, book_title):
 def ask_athena(athena_prompt):
     response = openai.ChatCompletion.create(
         model='gpt-3.5-turbo',
-        max_tokens=4000,
+        max_tokens=2500,
         messages=[
             {'role': 'system', 'content': f'You are Athena, a helpful and wise AI assistant. You are a subject matter expert in all domains.Please respond to the following prompt: {athena_prompt}'},
         ],
