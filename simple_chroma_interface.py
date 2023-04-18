@@ -42,7 +42,7 @@ def add_documents_from_folder(collection, folder_path):
     print(f"{len(documents)} documents added to the collection.")
 
 
-unwanted_strings = ["This ebook belongs to William Tatum (info@atlas3dss.com),", "purchased on 14/04/2023"]
+unwanted_strings = []
 def remove_unwanted_strings(text, unwanted_strings):
     for string in unwanted_strings:
         text = text.replace(string, '')
