@@ -23,34 +23,6 @@ def create_collection(chroma_client):
     print(f"Collection {name} created.")
     return collection, name
 
-def chunk_text(text: str, max_chunk: int = 1500, min_chunk: int = 150, overlap: int = 300):
-    print("Chunking text...")
-    words = text.split()
-    chunks = []
-    start = 0
-    while start < len(words):
-        end = start + max_chunk
-        if end < len(words) and len(words[end:]) > min_chunk:
-            end -= overlap
-        chunks.append(' '.join(words[start:end]))
-        start = end
-    print("Text chunked.")
-    return chunks
-    
-
-def process_txt(txt_path):
-    txt_file_name = os.path.basename(txt_path).replace('.txt', '')
-    chunked_folder = f"chunked_{txt_file_name}"
-    if not os.path.exists(chunked_folder):
-        os.makedirs(chunked_folder)
-    with open(txt_path, 'r', encoding='utf-8', errors='replace') as f:
-        text = f.read()
-    chunks = chunk_text(text)
-    for i, chunk in enumerate(chunks):
-        with open(os.path.join(chunked_folder, f"chunk_{i + 1}.txt"), "w", encoding='utf-8', errors='replace') as f:
-            f.write(chunk)
-    return chunked_folder
-
 
 def add_documents_from_folder(collection, folder_path):
     """Add all text files in the specified folder to the collection."""
@@ -97,49 +69,79 @@ def get_text_from_pdf(pdf_path, unwanted_strings):
             print("Text file saved.")
     return text
 
-##ATHENA FUNCTIONS AND PROMPTS##
-def extract_keywords(chunks, book_title):
-    extracted_keywords_folder = f"extracted_keywords_{book_title}"
-    if not os.path.exists(extracted_keywords_folder):
-        os.makedirs(extracted_keywords_folder)
+def chunk_text(text: str, max_chunk: int = 1500, min_chunk: int = 150, overlap: int = 300):
+    print("Chunking text...")
+    words = text.split()
+    chunks = []
+    start = 0
+    while start < len(words):
+        end = start + max_chunk
+        if end < len(words) and len(words[end:]) > min_chunk:
+            end -= overlap
+        chunks.append(' '.join(words[start:end]))
+        start = end
+    print("Text chunked.")
+    return chunks
+
+def process_text(txt_path,book_title):
+    txt_file_name = os.path.basename(txt_path).replace('.txt', '')
+
+    # Create the required folder structure
+    main_folder = f"chunked_{txt_file_name}"
+    extracted_keywords_folder = os.path.join(main_folder, f"extracted_keywords_{txt_file_name}")
+    summarized_folder = os.path.join(main_folder, f"summarized_chunked_{txt_file_name}")
+
+    for folder in [main_folder, extracted_keywords_folder, summarized_folder]:
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+
+    # Read the input text file
+    with open(txt_path, 'r', encoding='utf-8', errors='replace') as f:
+        text = f.read()
+
+    # Chunk the text
+    chunks = chunk_text(text)
 
     for i, chunk in enumerate(chunks):
-        keywords = extract_keywords_athena(chunk, book_title)
+        # Clean the chunk and save it as a text file with the same name as the chunk_number from the original text file with cleaned_appended
+        cleaned_chunk = clean_athena_(chunk, txt_file_name)
+        print(cleaned_chunk)
+        with open(os.path.join(main_folder, f"chunk_{i + 1}.txt"), "w", encoding='utf-8', errors='replace') as f:
+            f.write(cleaned_chunk)
+              
+
+        # Extract keywords from the chunk and save it as a text file with the same name as the chunk_number from the original text file with keywords_appended
+        keywords = extract_keywords_athena(cleaned_chunk, txt_file_name)
+        print(keywords)
         with open(os.path.join(extracted_keywords_folder, f"keywords_{i + 1}.txt"), "w", encoding='utf-8', errors='replace') as f:
             f.write(keywords)
 
-    return extracted_keywords_folder
+        # Summarize the chunk and save it as a text file with the same name as the chunk_number from the original text file with keywords_appended
+        summary = ask_summarize_athena(cleaned_chunk, txt_file_name)
+        print(summary)
+        with open(os.path.join(summarized_folder, f"summary_{i + 1}.txt"), "w", encoding='utf-8', errors='replace') as f:
+            f.write(summary)
+
+    return main_folder, extracted_keywords_folder, summarized_folder
 
 
-def extract_keywords_athena(chunk, book_title):
+
+##ATHENA FUNCTIONS AND PROMPTS##
+def extract_keywords_athena(cleaned_chunk, book_title):
     response = openai.ChatCompletion.create(
         model='gpt-3.5-turbo',
-        max_tokens=2500,
+        
         messages=[
-            {'role': 'system', 'content': f'You are Athena, and you extract keywords from chunks of text from books. At the start of your extraction, state "This keyword extraction corresponds to {book_title}." Now, please extract keywords from the following chunk: {chunk} from the book {book_title}. For this task, you will identify and return the most important keywords or key phrases from the chunk. At the end of your extraction, always state "This keyword extraction corresponds to {book_title}."'},
+            {'role': 'system', 'content': f'You are Athena, and you extract keywords from chunks of text from books. At the start of your extraction, state "This keyword extraction corresponds to {book_title}." Now, please extract keywords from the following chunk: {cleaned_chunk} from the book {book_title}. For this task, you will identify and return the most important keywords or key phrases from the chunk. At the end of your extraction, always state "This keyword extraction corresponds to {book_title}."'},
         ],
     )
 
     return response.choices[0].message["content"]
 
-
-def chunk_cleaning(chunks, book_title):
-    clean_chunks = f"clean_chunks_{book_title}"
-    if not os.path.exists(clean_chunks):
-        os.makedirs(clean_chunks)
-
-    for i, chunk in enumerate(chunks):
-        cleaned_chunk = clean_athena_(chunk, book_title)
-        with open(os.path.join(clean_chunks, f"clean_chunk_{i + 1}.txt"), "w", encoding='utf-8', errors='replace') as f:
-            f.write(cleaned_chunk)
-
-    return clean_chunks
-
-
 def clean_athena_(chunk,book_title):
     response = openai.ChatCompletion.create(
         model='gpt-3.5-turbo',
-        max_tokens=2500,
+        
         temperature=0.0,
         messages=[
             {'role': 'system', 'content': f'You are Athena, you clean chunks of text from books. At the start of your cleaning state "This cleaning corresponds to {book_title}. Now, please clean the following: {chunk} from the following book {book_title}. For this task you will clean up the formatting of the chunk delivered to you. You will return the chunk with only formatting, grammar, or spelling changes. You wil not add new content or otherwise alter the meaning of the text. At the end of your cleaning always state "This cleaning corresponds to {book_title}."'},    
@@ -148,26 +150,17 @@ def clean_athena_(chunk,book_title):
 
     return response.choices[0].message["content"]
 
-def summarize_chunks(summarization_path, book_title):
-   
-    summary_folder_name = f"summarized_{os.path.basename(summarization_path)}"
-    summary_folder_path = os.path.join(summarization_path, summary_folder_name)
-    if not os.path.exists(summary_folder_path):
-        os.makedirs(summary_folder_path)
+def ask_summarize_athena(chunk, book_title):
+    book_title = book_title
+    response = openai.ChatCompletion.create(
+        model='gpt-3.5-turbo',
+        
+        messages=[
+            {'role': 'system', 'content': f'"You are Athena, you summarize snippets of text from books. At the start of your summaries state "This summary corresponds to {book_title}. Now, please summarize the following: {chunk} from the following book {book_title}. Verbosity is preferred over brevity. Use as many words as you need to summarize the chunk. Avoid jargon but include any relevant technical terms. Specifically pull out any definitions, keywords, or explanations of terms that are relevant to the chunk. At the end of your summary always state "This summary corresponds to {book_title}."'},    
+        ],
+    )  
 
-    chunks = []
-    for file in os.listdir(summarization_path):
-        if file.endswith(".txt"):
-            with open(os.path.join(summarization_path, file), 'r', encoding='utf-8', errors='replace') as f:
-                chunk = f.read()
-                chunks.append(chunk)
-
-    for i, chunk in enumerate(chunks):
-        summary = ask_summarize_athena(chunk, book_title)
-        with open(os.path.join(summary_folder_path, f"summary_{i + 1}.txt"), "w", encoding='utf-8', errors='replace') as f:
-            f.write(summary)
-
-    return summary_folder_path,book_title
+    return response.choices[0].message["content"]
 
 
 def query_collection(collection):
@@ -204,23 +197,10 @@ def query_collection(collection):
     # Print the response
     print(f"Athena's response: {athena_response}")
 
-
-def ask_summarize_athena(chunk, book_title):
-    book_title = book_title
-    response = openai.ChatCompletion.create(
-        model='gpt-3.5-turbo',
-        max_tokens=2500,
-        messages=[
-            {'role': 'system', 'content': f'"You are Athena, you summarize snippets of text from books. At the start of your summaries state "This summary corresponds to {book_title}. Now, please summarize the following: {chunk} from the following book {book_title}. Verbosity is preferred over brevity. Use as many words as you need to summarize the chunk. Avoid jargon but include any relevant technical terms. Specifically pull out any definitions, keywords, or explanations of terms that are relevant to the chunk. At the end of your summary always state "This summary corresponds to {book_title}."'},    
-        ],
-    )  
-
-    return response.choices[0].message["content"]
-
 def ask_athena(athena_prompt):
     response = openai.ChatCompletion.create(
         model='gpt-3.5-turbo',
-        max_tokens=2500,
+        
         messages=[
             {'role': 'system', 'content': f'You are Athena, a helpful and wise AI assistant. You are a subject matter expert in all domains.Please respond to the following prompt: {athena_prompt}'},
         ],
@@ -286,11 +266,8 @@ def main():
         print("4. Load a collection")
         print("5. Process a PDF")
         print("6. Process a TXT")
-        print("7. Summarize Chunks of TXT")
-        print("8. Delete a collection")
-        print("9. Clean Chunks of TXT")
-        print("10. Extract Keywords from Chunks of TXT")
-        print("11. Exit")
+        print("7. Delete a collection")
+        print("8. Exit")
         choice = input("Enter your choice: ")
         if choice == "1":
             name = input("Enter a name for the collection: ")
@@ -336,57 +313,17 @@ def main():
             get_text_from_pdf(pdf_path, unwanted_strings)
         elif choice == "6":
             txt_path = input("Enter the path to the TXT: ")
-            process_txt(txt_path)
-        elif choice == "7":
-            summarization_path = input("Enter the path to the folder containing the chunks of TXT to be summarized: ")
             book_title = input("Enter the title of the book: ")
-            if not os.path.isdir(summarization_path):
-                print("Error: the specified path is not a directory.")
-                continue
-            summarize_chunks(summarization_path, book_title)
-            
-        elif choice == "8":
+            process_text(txt_path,book_title)
+        elif choice == "7":
             name = input("Enter the name of the collection to delete: ")
             try:
                 chroma_client.delete_collection(name=name)
                 print(f"Collection {name} deleted.")
             except ValueError as e:
                 print(f"Error: {e}")
-
-        elif choice == "9":
-            chunks_folder = input("Enter the path to the folder containing the chunks of TXT to be cleaned: ")
-            book_title = input("Enter the title of the book: ")
-            if not os.path.isdir(chunks_folder):
-                print("Error: the specified path is not a directory.")
-                continue
-            chunks = []
-            for file in os.listdir(chunks_folder):
-                if file.endswith(".txt"):
-                    with open(os.path.join(chunks_folder, file), 'r', encoding='utf-8', errors='replace') as f:
-                        chunk = f.read()
-                        chunks.append(chunk)
-            clean_chunks_folder = chunk_cleaning(chunks, book_title)
-            print(f"Clean chunks saved in the folder: {clean_chunks_folder}")
-
-        elif choice == "10":
-            chunks_folder = input("Enter the path to the folder containing the chunks of TXT for keyword extraction: ")
-            book_title = input("Enter the title of the book: ")
-            if not os.path.isdir(chunks_folder):
-                print("Error: the specified path is not a directory.")
-                continue
-            chunks = []
-            for file in os.listdir(chunks_folder):
-                if file.endswith(".txt"):
-                    with open(os.path.join(chunks_folder, file), 'r', encoding='utf-8', errors='replace') as f:
-                        chunk = f.read()
-                        chunks.append(chunk)
-            extracted_keywords_folder = extract_keywords(chunks, book_title)
-            print(f"Extracted keywords saved in the folder: {extracted_keywords_folder}")
-
-        elif choice == "11":
+        elif choice == "8":
             break
-
-
 
 if __name__ == "__main__":
     main()
