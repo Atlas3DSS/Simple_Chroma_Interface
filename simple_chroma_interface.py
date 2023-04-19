@@ -3,6 +3,9 @@ import os
 import openai
 from PyPDF2 import PdfReader
 from dotenv import load_dotenv
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from autoresearcher import literature_review
+from collections import Counter
 
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -42,12 +45,38 @@ def add_documents_from_folder(collection, folder_path):
     print(f"{len(documents)} documents added to the collection.")
 
 
-unwanted_strings = []
+def concatenate_keywords(keyword_path):
+    """Concatenate all keywords from the specified folder into one list."""
+    keywords = set()
+    for filename in os.listdir(keyword_path):
+        if not filename.startswith("keywords_"):
+            continue
+        with open(os.path.join(keyword_path, filename), "r", encoding="utf-8") as f:
+            keyword = f.read().strip()
+        keywords.add(keyword)
+
+    # Save the unique keywords in a CSV txt file called all_keywords.txt
+    with open(os.path.join(keyword_path, "all_keywords.txt"), "w", encoding="utf-8") as f:
+        f.write(','.join(keywords))
+
+    print(f"{len(keywords)} unique keywords added to the collection.")
+
+    # Find the top 15 most common words and save them to most_common_keywords.txt
+    word_counts = Counter(','.join(keywords).split(','))
+    most_common_keywords = word_counts.most_common(15)
+
+    with open(os.path.join(keyword_path, "most_common_keywords.txt"), "w", encoding="utf-8") as f:
+        for word, count in most_common_keywords:
+            f.write(f"{word}\n")
+
+    return list(keywords)
+
+
+unwanted_strings = ["This ebook belongs to William Tatum (info@atlas3dss.com),", "purchased on 14/04/2023"]
 def remove_unwanted_strings(text, unwanted_strings):
     for string in unwanted_strings:
         text = text.replace(string, '')
     return text
-
 
 def get_text_from_pdf(pdf_path, unwanted_strings):
     txt_file_name = pdf_path.replace('.pdf', '.txt')
@@ -69,7 +98,19 @@ def get_text_from_pdf(pdf_path, unwanted_strings):
             print("Text file saved.")
     return text
 
-def chunk_text(text: str, max_chunk: int = 1500, min_chunk: int = 150, overlap: int = 300):
+def process_chunk(chunk, i, book_title, root_folder):
+    cleaned_chunk = clean_athena_(chunk, book_title)
+    keywords = extract_keywords_athena(cleaned_chunk)
+    summary = ask_summarize_athena(cleaned_chunk, book_title)
+
+    with open(os.path.join(root_folder, f"chunk_{i + 1}.txt"), "w", encoding='utf-8', errors='replace') as f:
+        f.write(cleaned_chunk)
+    with open(os.path.join(root_folder, f"keywords_{i + 1}.txt"), "w", encoding='utf-8', errors='replace') as f:
+        f.write(keywords)
+    with open(os.path.join(root_folder, f"summary_{i + 1}.txt"), "w", encoding='utf-8', errors='replace') as f:
+        f.write(summary)
+
+def chunk_text(text: str, max_chunk: int = 750, min_chunk: int = 150, overlap: int = 300):
     print("Chunking text...")
     words = text.split()
     chunks = []
@@ -83,56 +124,62 @@ def chunk_text(text: str, max_chunk: int = 1500, min_chunk: int = 150, overlap: 
     print("Text chunked.")
     return chunks
 
-def process_text(txt_path,book_title):
+def process_text(txt_path, book_title):
     txt_file_name = os.path.basename(txt_path).replace('.txt', '')
+    root_folder = f"{txt_file_name}_processed"
+    if not os.path.exists(root_folder):
+        os.makedirs(root_folder)
 
-    # Create the required folder structure
-    main_folder = f"chunked_{txt_file_name}"
-    extracted_keywords_folder = os.path.join(main_folder, f"extracted_keywords_{txt_file_name}")
-    summarized_folder = os.path.join(main_folder, f"summarized_chunked_{txt_file_name}")
-
-    for folder in [main_folder, extracted_keywords_folder, summarized_folder]:
-        if not os.path.exists(folder):
-            os.makedirs(folder)
-
-    # Read the input text file
     with open(txt_path, 'r', encoding='utf-8', errors='replace') as f:
         text = f.read()
 
-    # Chunk the text
     chunks = chunk_text(text)
+    max_workers = input("How many workers would you like to use? ")
+    with ThreadPoolExecutor(max_workers) as executor:
+        futures = []
+        for i, chunk in enumerate(chunks):
+            futures.append(executor.submit(process_chunk, chunk, i, book_title, root_folder))
 
-    for i, chunk in enumerate(chunks):
-        # Clean the chunk and save it as a text file with the same name as the chunk_number from the original text file with cleaned_appended
-        cleaned_chunk = clean_athena_(chunk, txt_file_name)
-        print(cleaned_chunk)
-        with open(os.path.join(main_folder, f"chunk_{i + 1}.txt"), "w", encoding='utf-8', errors='replace') as f:
-            f.write(cleaned_chunk)
-              
+        for future in as_completed(futures):
+            future.result()
 
-        # Extract keywords from the chunk and save it as a text file with the same name as the chunk_number from the original text file with keywords_appended
-        keywords = extract_keywords_athena(cleaned_chunk, txt_file_name)
-        print(keywords)
-        with open(os.path.join(extracted_keywords_folder, f"keywords_{i + 1}.txt"), "w", encoding='utf-8', errors='replace') as f:
-            f.write(keywords)
+    # Collect keywords from all keyword files
+    keyword_list = []
+    for file in os.listdir(root_folder):
+        if file.startswith("keywords_"):
+            with open(os.path.join(root_folder, file), 'r', encoding='utf-8', errors='replace') as f:
+                for line in f.readlines():
+                    keyword_list.append(line.strip())
+    # Remove duplicates
+    keyword_list = list(set(keyword_list))
 
-        # Summarize the chunk and save it as a text file with the same name as the chunk_number from the original text file with keywords_appended
-        summary = ask_summarize_athena(cleaned_chunk, txt_file_name)
-        print(summary)
-        with open(os.path.join(summarized_folder, f"summary_{i + 1}.txt"), "w", encoding='utf-8', errors='replace') as f:
-            f.write(summary)
+    # Save the unique keywords to a file
+    with open(os.path.join(root_folder, "unique_keywords.txt"), "w", encoding='utf-8', errors='replace') as f:
+        for keyword in keyword_list:
+            f.write(keyword + "\n")
 
-    return main_folder, extracted_keywords_folder, summarized_folder
+    return root_folder
 
+
+def keyword_collection(folder_path):
+    keyword_list = []
+    for file in os.listdir(folder_path):
+        if not file.startswith("keywords_"):
+            continue
+        with open(os.path.join(folder_path, file), 'r', encoding='utf-8', errors='replace') as f:
+            for line in f.readlines():
+                keyword_list.append(line.strip())
+    keyword_list = list(set(keyword_list))
+    return keyword_list
 
 
 ##ATHENA FUNCTIONS AND PROMPTS##
-def extract_keywords_athena(cleaned_chunk, book_title):
+def extract_keywords_athena(cleaned_chunk):
     response = openai.ChatCompletion.create(
         model='gpt-3.5-turbo',
-        
+        temperature=0.0,
         messages=[
-            {'role': 'system', 'content': f'You are Athena, and you extract keywords from chunks of text from books. At the start of your extraction, state "This keyword extraction corresponds to {book_title}." Now, please extract keywords from the following chunk: {cleaned_chunk} from the book {book_title}. For this task, you will identify and return the most important keywords or key phrases from the chunk. At the end of your extraction, always state "This keyword extraction corresponds to {book_title}."'},
+            {'role': 'system', 'content': f'Extract keywords from {cleaned_chunk} Identify and return 10 keywords combinations from the chunk.'},
         ],
     )
 
@@ -144,7 +191,7 @@ def clean_athena_(chunk,book_title):
         
         temperature=0.0,
         messages=[
-            {'role': 'system', 'content': f'You are Athena, you clean chunks of text from books. At the start of your cleaning state "This cleaning corresponds to {book_title}. Now, please clean the following: {chunk} from the following book {book_title}. For this task you will clean up the formatting of the chunk delivered to you. You will return the chunk with only formatting, grammar, or spelling changes. You wil not add new content or otherwise alter the meaning of the text. At the end of your cleaning always state "This cleaning corresponds to {book_title}."'},    
+            {'role': 'system', 'content': f'You clean chunks of text from books. Please clean the following: {chunk} from the following book {book_title}. Clean up the formatting of the chunk delivered to you. Return the chunk with clean, clear, elegant formatting, grammar, and spelling corrections. Add nothing new. Do not alter the meaning of the text.'},    
         ],
     )  
 
@@ -156,7 +203,7 @@ def ask_summarize_athena(chunk, book_title):
         model='gpt-3.5-turbo',
         
         messages=[
-            {'role': 'system', 'content': f'"You are Athena, you summarize snippets of text from books. At the start of your summaries state "This summary corresponds to {book_title}. Now, please summarize the following: {chunk} from the following book {book_title}. Verbosity is preferred over brevity. Use as many words as you need to summarize the chunk. Avoid jargon but include any relevant technical terms. Specifically pull out any definitions, keywords, or explanations of terms that are relevant to the chunk. At the end of your summary always state "This summary corresponds to {book_title}."'},    
+            {'role': 'system', 'content': f'"You summarize snippets of text from books. Summarize the following: {chunk} from the following book {book_title}. Verbosity is preferred over brevity. Summarize as a subject matter expert would when speaking to a junior mentee. Avoid jargon, but include  relevant technical terms. Response should have 1-2 paragraphs of summary, Summary: Content. Include a Glossary of terms at the end of the summary. Glossary: Term, Definition. Return the summary with clean, clear, elegant formatting, grammar, and spelling corrections.'},    
         ],
     )  
 
@@ -171,7 +218,7 @@ def query_collection(collection):
         if query_text.lower() == "done":
             break
         query_texts.append(query_text)
-    n_results = int(input("Enter the number of results to return: "))
+    n_results = 10
     results = collection.query(query_texts=query_texts, n_results=n_results)
         
     # Initialize the texts variable
@@ -267,7 +314,9 @@ def main():
         print("5. Process a PDF")
         print("6. Process a TXT")
         print("7. Delete a collection")
-        print("8. Exit")
+        print("8. Keyword merge")
+        print("9. Generate a lit review")
+        print("10. Exit")
         choice = input("Enter your choice: ")
         if choice == "1":
             name = input("Enter a name for the collection: ")
@@ -323,6 +372,14 @@ def main():
             except ValueError as e:
                 print(f"Error: {e}")
         elif choice == "8":
+            keyword_path = input("Enter the path to the folder containing the keywords files: ")
+            concatenate_keywords(keyword_path)
+        elif choice == "9":            
+            research_question = input("Enter the research question: ")
+            output_filename = f"my_{research_question.replace(' ', '_')}_review.txt"
+            researcher = literature_review(research_question, output_file=output_filename)
+
+        elif choice == "10":
             break
 
 if __name__ == "__main__":
